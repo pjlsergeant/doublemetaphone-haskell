@@ -1,4 +1,10 @@
+
+module Text.DoubleMetaphone (doubleMetaphone, doubleMetaphoneDebug)
+where
+
+
 import Data.List
+import Data.Char
 
 data HVal = HInt Int | HStr String deriving (Eq, Ord, Show, Read)
 instance Num HVal where
@@ -7,8 +13,16 @@ instance Num HVal where
 
 type SHash = [(String, HVal)]
 
-doubleMetaphone :: String -> SHash
-doubleMetaphone input = conc input [
+doubleMetaphone :: String -> [String]
+doubleMetaphone input = if primary /= secondary && (length secondary) > 0
+                          then [primary,secondary]
+                          else [primary]
+                        where context   = doubleMetaphoneDebug input
+                              primary   = hStr (hLookup "primary" context)
+                              secondary = hStr (hLookup "secondary" context)
+
+doubleMetaphoneDebug :: String -> SHash
+doubleMetaphoneDebug input = conc (map (toUpper) input) [
                           ("primary",   HStr ""),
                           ("secondary", HStr ""),
                           ("skip",      HInt 0 ),
@@ -63,8 +77,8 @@ conc full@(x:xs) context
     = conc xs (addS "F" c)
 
   -- H - only show it if it's at the start of between two vowels
-  | ( x == 'H' && isStart ) || (isVowel xp1 && isVowel xm1)
-    = conc xs (hInc "skip" 1 (addS "H" c))
+  -- | ( x == 'H' && isStart ) || (isVowel xp1 && isVowel xm1)
+  --  = conc xs (hInc "skip" 1 (addS "H" c))
 
   -- Default case, do nothing!
   | otherwise = conc xs (hApp "primary" ['*',x] c)
@@ -85,7 +99,7 @@ conc full@(x:xs) context
         -- Some shortcuts to make our life a little easier
         x2        = take 2 full -- this character and the next
         x3        = take 3 full -- this character and the next two
-        xm1       = if (position == 0) then "" else original !! (position - 1)
+        -- xm1       = if (position == 0) then "" else original !! (position - 1)
         xp1       = take 1 xs -- The next character, alone
         isStart   = position == 0
 

@@ -1,0 +1,21 @@
+name: double-metaphone
+version: 0.1
+cabal-version: >= 1.2
+build-type: Simple
+license: BSD3
+license-file: COPYING
+copyright: Copyright 2012 Peter Sergeant
+author: Peter Sergeant
+maintainer: pete@clueball.com
+stability: alpha
+homepage: https://github.com/sheriff/doublemetaphone-haskell
+synopsis: Double Metaphone
+description:
+
+   This package implements Double Metaphone, a system for hashing
+   European surnames for comparison and searching. Surnames that
+   sound the same should return the same hash.
+
+category: Text, Natural Language Processing
+exposed-modules: Text.DoubleMetaphone
+build-depends: base
