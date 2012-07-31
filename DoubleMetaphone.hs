@@ -1,16 +1,20 @@
 
-module Text.DoubleMetaphone (doubleMetaphone, doubleMetaphoneDebug)
-where
+-- module Text.DoubleMetaphone (doubleMetaphone, doubleMetaphoneDebug)
+-- where
 
 import Prelude
 import Data.Map
 import Data.Char
+import Data.List
 
 -- Temporary test cases go here, until it's time to split them out
 runTests :: [(String,[String],[String])]
 runTests =  Prelude.map (\x -> ((fst x),(snd x),(doubleMetaphone (fst x)))) (
             Prelude.filter (\x -> (doubleMetaphone (fst x)) /= (snd x) ) [
                ("Edge",  ["AJ"]),
+               ("HA",    ["H"]),
+               ("XHA",   ["S"]),
+               ("AHA",   ["AH"]),
                ("X",     ["S"]),
                ("BB",    ["P"]),
                ("Canary",["Canard"] )
@@ -94,7 +98,8 @@ doubleMetaphone input = if primary /= secondary && (length secondary) > 0
 -- Run the algorithm, but return the whole context instead of just the hashed
 -- strings
 doubleMetaphoneDebug :: String -> Context
-doubleMetaphoneDebug input = m (Prelude.map (toUpper) input) defaultContext
+doubleMetaphoneDebug input = m bigInput (cApp "original" bigInput defaultContext)
+  where bigInput = Prelude.map (toUpper) input
 
 -- This is the recursive function that does the transform. We pull out some
 -- very useful pieces of data in the 'where' clause at the bottom, and it's
@@ -112,33 +117,42 @@ m full@(x:xs) context -- Use 'c', not 'context', as per the 'where' section
   -- There are a funny set of consonants at the beginning of names where we want
   -- to pretend we didn't see the first letter. Matching without doing anything
   -- does that
-  | isStart && xx `elem` ["GN", "KN", "PN", "WR", "PS"] = next (id)
+  | isFirst && starts ["GN", "KN", "PN", "WR", "PS"] = next (id)
 
   -- Initial 'X' is pronounced 'Z' e.g. 'Xavier'
-  | isStart && x == 'X' = next (add "S")
+  | isFirst && starts ["X"] = next (add "S")
 
-  -- Match any starting vowels, and translate them directly to A
-  | isStart && isVowel x = next (add "A")
+  -- Match any starting vowels, and translate them directly to A. Other vowels
+  -- are skipped
+  | isFirst && isVowel x = next (add "A")
+  | isVowel x = next (id)
 
   -- B
-  | xx == "BB" = next (add "P" . skip) -- BB -> P
-  | x  == 'B'  = next (add "P")        -- B  -> P
-
-  -- Combinations like 'edge'
-  | xxx `elem` ["DGI","DGE","DGY"] = next (add "J" . skip . skip)
-
-  -- Combinations like 'edgar'
-  | xx == "DG" = next (add "TK" . skip)
+  | starts["BB"] = next (add "P" . skip) -- BB -> P
+  | starts["B"]  = next (add "P")        -- B  -> P
 
   -- D
-  | (xx == "DD" || xx == "DT") = next (add "T" . skip)
-  | x == 'D' = next (add "T")
+  -- Combinations like 'edge'
+  | starts ["DGI","DGE","DGY"] = next (add "J" . skip . skip)
+  -- Combinations like 'edgar'
+  | starts ["DG"] = next (add "TK" . skip)
+  -- Just a simple starting D
+  | starts ["DD","DT"] = next (add "T" . skip)
+  | starts ["D"]       = next (add "T")
 
-  -- -- F
-  -- | x2 == "FF"
-  --  = conc xs (hInc "skip" 1 (addS "F" c))
-  -- | x  == 'F'
-  --  = conc xs (addS "F" c)
+  -- F
+  | starts["FF"] = next (add "F" . skip)
+  | starts["F"]  = next (add "F")
+
+  -- H - We include an H when it's followed by a vowel, and preceeded either by
+  --     a vowel or the start of the string
+  | starts["H"] && (isFirst || isVowel (relChar (-1)) ) && isVowel (relChar 1)
+    = next (add "H")
+  | starts["H"] = next (id)
+
+  -- K
+  | starts["KK"] = next (add "K" . skip)
+  | starts["K"]  = next (add "K")
 
   -- Default case, do nothing!
   | otherwise = next (add "*")
@@ -149,22 +163,37 @@ m full@(x:xs) context -- Use 'c', not 'context', as per the 'where' section
         toSkip = cLookupInt "skip" context
 
         -- The original string, for reference
-        original = cLookupInt "original" context
+        original = cLookupStr "original" context
 
         -- The current position
         position = cLookupInt "position" context
 
         -- Create a copy of the context where the position is already
-        -- incremented
-        c         = cInc "position" 1 context
+        -- incremented (for the next iteration)
+        c = cInc "position" 1 context
 
-        -- Some shortcuts to make our life a little easier
-        xx        = take 2 full -- this character and the next
-        xxx       = take 3 full -- this character and the next two
-        -- xm1       = if (position == 0) then "" else original !! (position - 1)
-        xp1       = take 1 xs -- The next character, alone
-        isStart   = position == 0
+        -- A mashup of isPrefixOf and any
+        starts = ( \prefixes -> any (\prefix -> isPrefixOf prefix full ) prefixes )
+
+        -- Are we at the beginning of the string?
+        isFirst   = position == 0
 
         -- Apply the context to whatever expression we were given, and recurse
         next = ( \expression -> (m xs (expression c)) )
+
+        -- Get the character at the relative index to position, where -1 is the
+        -- character before, and 1 is the next character. Returns a literal '*'
+        -- if we don't have that character
+        relChar = (\idx -> relCharOrStar original position idx)
+
+--
+-- Functions supporting the 'where' clause
+--
+
+-- Returns the char x places away from the current position, or a '*'
+relCharOrStar :: String -> Int -> Int -> Char
+relCharOrStar input currPos relPos =
+  if ( ( absPos < 0 ) || ( absPos >= strLen ) ) then '*' else input !! absPos
+  where absPos = currPos + relPos
+        strLen = length input
 
